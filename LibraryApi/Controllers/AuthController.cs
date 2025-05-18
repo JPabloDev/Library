@@ -1,4 +1,4 @@
-﻿using LibraryApi.Models;
+﻿using LibraryApi.Models.DTOs;
 using LibraryApi.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -8,6 +8,7 @@ namespace LibraryApi.Controllers
 {
     [ApiController]
     [Route("api/[controller]")]
+    [AllowAnonymous]
     public class AuthController : ControllerBase
     {
         private readonly IAuthService _authService;

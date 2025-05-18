@@ -1,5 +1,6 @@
 ﻿using LibraryApi.Data;
-using LibraryApi.Models;
+using LibraryApi.Models.DTOs;
+using LibraryApi.Models.Entities;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using System.IdentityModel.Tokens.Jwt;
@@ -19,34 +20,39 @@ namespace LibraryApi.Services
             _configuration = configuration;
         }
 
-        public async Task<User?> AuthenticateAsync(UserLoginDto loginDto)
+        public async Task<Users?> AuthenticateAsync(UserLoginDto loginDto)
         {
-            var user = await _context.Users.FirstOrDefaultAsync(u => u.Username == loginDto.Username);
-            if (user == null) return null;
+            var user = _context.Usuarios.FirstOrDefaultAsync(u => u.Usuario == loginDto.Username).Result;
+            if (user == null)
+            { 
+                return null;
+            }
 
             // Comparación directa de contraseñas (solo para fines educativos)
-            return user.PasswordHash == loginDto.Password ? user : null;
+            return (user.Contrasena == loginDto.Password) ? user : null;
         }
 
         public async Task<bool> ChangePasswordAsync(int userId, string currentPassword, string newPassword)
         {
-            var user = await _context.Users.FindAsync(userId);
-            if (user == null) return false;
+            var user = await _context.Usuarios.FirstOrDefaultAsync(u => u.Id == userId);
+            if (user == null) 
+                return false;
 
-            if (user.PasswordHash != currentPassword) return false;
+            if (user.Contrasena != currentPassword)
+                return false;
 
-            user.PasswordHash = newPassword;
+            user.Contrasena = newPassword;
             await _context.SaveChangesAsync();
             return true;
         }
 
-        public string GenerateToken(User user)
+        public string GenerateToken(Users user)
         {
             var claims = new[]
             {
                 new Claim(ClaimTypes.NameIdentifier, user.Id.ToString()),
-                new Claim(ClaimTypes.Name, user.Username),
-                new Claim(ClaimTypes.Role, user.Role),
+                new Claim(ClaimTypes.Name, user.Usuario),
+                new Claim("Admin", user.Admin.ToString().ToLower())
             };
 
             var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_configuration["Jwt:Key"]!));

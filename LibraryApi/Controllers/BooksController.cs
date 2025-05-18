@@ -1,5 +1,6 @@
 ﻿using LibraryApi.Data;
-using LibraryApi.Models;
+using LibraryApi.Models.DTOs;
+using LibraryApi.Models.Entities;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -8,8 +9,7 @@ namespace LibraryApi.Controllers
 {
     [ApiController]
     [Route("api/[controller]")]
-    [Authorize]
-    [Authorize(Roles = "Admin")]
+    [Authorize(Policy = "SoloAdmins")]
     public class BooksController : ControllerBase
     {
         private readonly LibraryDbContext _context;
@@ -20,39 +20,64 @@ namespace LibraryApi.Controllers
         }
 
         [HttpGet]
-        public async Task<IActionResult> GetAll() => Ok(await _context.Books.ToListAsync());
+        public async Task<IActionResult> GetAll() => Ok(await _context.Libros.ToListAsync());
 
         [HttpPost]
-        public async Task<IActionResult> Create([FromBody] Book book)
+        public async Task<IActionResult> Create([FromBody] BooksDto dto)
         {
-            await _context.Books.AddAsync(book);
+            try
+            {
+                var book = new Books()
+                {
+                    Titulo = dto.Titulo,
+                    Activo = dto.Activo,
+                    Ano_Publicacion = dto.Ano_Publicacion,
+                    Autor = dto.Autor,
+                    Fecha_Actualizacion = DateTime.Now,
+                    Cantidad_Disponible = dto.Cantidad_Disponible,
+                    Cantidad_total = dto.Cantidad_total,
+                };
+            await _context.Libros.AddAsync(book);
             await _context.SaveChangesAsync();
             return Ok(book);
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { error = ex.Message });
+            }
         }
 
         [HttpPut("{id}")]
-        public async Task<IActionResult> Update(int id, [FromBody] Book updated)
+        public async Task<IActionResult> Update(int id, [FromBody] BooksDto dto)
         {
-            var book = await _context.Books.FindAsync(id);
-            if (book == null) return NotFound();
+            var book = await _context.Libros.FirstOrDefaultAsync(l => l.Id == id);
+            if (book == null) 
+                return NotFound();
 
-            book.Title = updated.Title;
-            book.Author = updated.Author;
-            book.Quantity = updated.Quantity;
+            book.Titulo = dto.Titulo;
+            book.Autor = dto.Autor;
+            book.Ano_Publicacion = dto.Ano_Publicacion;
+            book.Cantidad_total = dto.Cantidad_total;
+            book.Cantidad_Disponible = dto.Cantidad_Disponible;
+            book.Activo = dto.Activo;
+            book.Fecha_Actualizacion = DateTime.Now;
 
             await _context.SaveChangesAsync();
             return Ok(book);
         }
 
-        [HttpDelete("{id}")]
-        public async Task<IActionResult> Delete(int id)
+        [HttpPut("ChangeStatusToInActive/{id}")]
+        public async Task<IActionResult> ChangeStatusToInActive(int id)
         {
-            var book = await _context.Books.FindAsync(id);
-            if (book == null) return NotFound();
+            var book = await _context.Libros.FirstOrDefaultAsync(l => l.Id == id);
+            book.Fecha_Actualizacion = DateTime.Now;
+            if (book == null) 
+                return NotFound();
 
-            _context.Books.Remove(book);
+            book.Activo = false;
+
             await _context.SaveChangesAsync();
-            return Ok("Libro eliminado.");
+            return Ok("El Libro ha Cambiado de estado Exitosamente.");
         }
     }
 }

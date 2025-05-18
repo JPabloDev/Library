@@ -1,4 +1,4 @@
-﻿namespace LibraryApi.Models
+﻿namespace LibraryApi.Models.DTOs
 {
     public class UserLoginDto
     {

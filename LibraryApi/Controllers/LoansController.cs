@@ -1,14 +1,16 @@
 ﻿using LibraryApi.Data;
-using LibraryApi.Models;
+using LibraryApi.Models.DTOs;
+using LibraryApi.Models.Entities;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using System.Security.Claims;
 
 namespace LibraryApi.Controllers
 {
     [ApiController]
     [Route("api/[controller]")]
-    [Authorize(Roles = "Admin")]
+    [Authorize(Policy = "SoloAdmins")]
     public class LoansController : ControllerBase
     {
         private readonly LibraryDbContext _context;
@@ -19,33 +21,98 @@ namespace LibraryApi.Controllers
         }
 
         [HttpGet]
-        public async Task<IActionResult> GetAll() => Ok(await _context.Loans.Include(l => l.Book).ToListAsync());
+        public async Task<IActionResult> GetAll() => Ok(await _context.Prestamos.Include(l => l.Libro).Include(l => l.Usuario).ToListAsync());
 
         [HttpPost]
-        public async Task<IActionResult> Create([FromBody] Loan loan)
+        public async Task<IActionResult> Create([FromBody] LoansDto loanDto)
         {
-            var book = await _context.Books.FindAsync(loan.BookId);
-            if (book == null || book.Quantity < 1)
-                return BadRequest("El libro no está disponible.");
+            try{
+                var book = await _context.Libros.FirstOrDefaultAsync(x => x.Id == loanDto.IdLibro);
+                if (book == null || book.Cantidad_Disponible < 1)
+                    return BadRequest("El libro no está disponible.");
 
-            book.Quantity -= 1;
-            loan.LoanDate = DateTime.Now;
+                var user = await _context.Usuarios.FirstOrDefaultAsync(y => y.Cedula == loanDto.CedulaUsuario);
+                if (user == null || !user.Activo)
+                    return BadRequest("El Usuario no esta activo.");
 
-            await _context.Loans.AddAsync(loan);
-            await _context.SaveChangesAsync();
-            return Ok(loan);
+                book.Cantidad_Disponible -= 1;
+
+                var loan = new Loans()
+                {
+                    Fecha_Prestamo = DateTime.Now,
+                    Finalizado = false,
+                    Id_Libros = book.Id,
+                    Id_Usuario = user.Id,
+                };
+
+                await _context.Prestamos.AddAsync(loan);
+                await _context.SaveChangesAsync();
+                return Ok(new
+                {
+                    PrestamoId = loan.Id,
+                    Usuario = user.Usuario,
+                    Libro = book.Titulo,
+                    FechaPrestamo = loan.Fecha_Prestamo
+                });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { error = ex.Message });
+            }
+
         }
+
+
+        [HttpGet("GetLoanByCedula/{cedula}")]
+        public async Task<IActionResult> GetLoanByCedula(int cedula)
+        {
+            try
+            {
+                var user = await _context.Usuarios.FirstOrDefaultAsync(y => y.Cedula == cedula);
+                if (user == null)
+                    return NotFound("Usuario no encontrado");
+
+                var loans = await _context.Prestamos
+                    .Include(l => l.Libro)
+                    .Include(l => l.Usuario)
+                    .Where(u => u.Id_Usuario == user.Id && u.Finalizado == false).ToListAsync();
+
+                if (!loans.Any())
+                    return NotFound("No hay Préstamos con esa cédula");
+
+                var result = loans.Select(loan => new
+                {
+                    loan.Id,
+                    loan.Fecha_Prestamo,
+                    loan.Fecha_Devolucion,
+                    loan.Finalizado,
+                    Libro = new { loan.Libro.Titulo, loan.Libro.Autor },
+                    Usuario = new { loan.Usuario.Nombre, loan.Usuario.Cedula }
+                });
+
+                return Ok(result);
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { error = ex.Message });
+            }
+        }
+
 
         [HttpPost("return/{id}")]
         public async Task<IActionResult> ReturnBook(int id)
         {
-            var loan = await _context.Loans.FindAsync(id);
-            if (loan == null) return NotFound();
+            var loan = await _context.Prestamos.FirstOrDefaultAsync(l => l.Id == id);
+            if (loan == null) 
+                return NotFound();
 
-            var book = await _context.Books.FindAsync(loan.BookId);
-            if (book != null) book.Quantity += 1;
+            var book = await _context.Libros.FirstOrDefaultAsync(v => v.Id == loan.Id_Libros);
+            if (book != null) 
+                book.Cantidad_Disponible += 1;
 
-            _context.Loans.Remove(loan);
+            loan.Fecha_Devolucion = DateTime.Now;
+            loan.Finalizado = true;
+               
             await _context.SaveChangesAsync();
             return Ok("Libro devuelto.");
         }
