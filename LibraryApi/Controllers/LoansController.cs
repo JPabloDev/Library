@@ -21,7 +21,23 @@ namespace LibraryApi.Controllers
         }
 
         [HttpGet]
-        public async Task<IActionResult> GetAll() => Ok(await _context.Prestamos.Include(l => l.Libro).Include(l => l.Usuario).ToListAsync());
+        public async Task<IActionResult> GetAll()
+        {
+            try
+            {
+                var prestamos = await _context.Prestamos
+                    .Include(l => l.Libro)
+                    .Include(x => x.Usuario)
+                    .ToListAsync();
+
+                return Ok(prestamos);
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { message = ex.Message, stackTrace = ex.StackTrace });
+            }
+        }
+
 
         [HttpPost]
         public async Task<IActionResult> Create([FromBody] LoansDto loanDto)
