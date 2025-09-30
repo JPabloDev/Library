@@ -1,4 +1,11 @@
+using HotChocolate.AspNetCore.Voyager;
 using LibraryApi.Data;
+using LibraryApi.Graphql.Book.Mutations;
+using LibraryApi.Graphql.Book.Queries;
+using LibraryApi.Graphql.Loan.Mutation;
+using LibraryApi.Graphql.Loan.Queries;
+using LibraryApi.Graphql.User.Mutations;
+using LibraryApi.Graphql.User.Queries;
 using LibraryApi.Services;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
@@ -9,11 +16,28 @@ using System.Text.Json.Serialization;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// Agregar conexi�n a SQL Server
+// Registrar DbContext con SQL Server
+builder.Services.AddPooledDbContextFactory<LibraryDbContext>(options =>
+    options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
+
 builder.Services.AddDbContext<LibraryDbContext>(options =>
     options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
 
-// Configurar JWT
+// Registrar GraphQL (sin autenticación)
+builder.Services
+    .AddGraphQLServer()
+    .AddQueryType(d => d.Name("Query"))  
+        .AddTypeExtension<BookQuery>()   
+        .AddTypeExtension<LoanQuery>()   
+        .AddTypeExtension<UserQuery>()  
+    .AddMutationType(d => d.Name("Mutation")) 
+        .AddTypeExtension<BookMutation>()    
+        .AddTypeExtension<LoanMutation>()     
+        .AddTypeExtension<UserMutation>()
+    .AddFiltering()
+    .AddSorting();
+
+// Configurar JWT para los endpoints REST (no para GraphQL)
 var jwtKey = builder.Configuration["Jwt:Key"] ?? "clave_super_secreta_1234567890";
 var keyBytes = Encoding.UTF8.GetBytes(jwtKey);
 
@@ -35,6 +59,7 @@ builder.Services.AddAuthentication(options =>
     };
 });
 
+// CORS
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowAll", policy =>
@@ -45,22 +70,24 @@ builder.Services.AddCors(options =>
     });
 });
 
-
 // Servicios personalizados
 builder.Services.AddScoped<IAuthService, AuthService>();
+
 builder.Services.AddAuthorization(options =>
 {
     options.AddPolicy("SoloAdmins", policy =>
-        policy.RequireClaim("Admin", "true")); // Solo si el claim Admin es true
+        policy.RequireClaim("Admin", "true"));
 });
 
+// Controllers + Swagger
 builder.Services.AddControllers()
     .AddJsonOptions(options =>
     {
         options.JsonSerializerOptions.ReferenceHandler = ReferenceHandler.IgnoreCycles;
     });
+
 builder.Services.AddEndpointsApiExplorer();
-builder.Services.AddSwaggerGen((c =>
+builder.Services.AddSwaggerGen(c =>
 {
     c.SwaggerDoc("v1", new OpenApiInfo { Title = "Mi API", Version = "v1" });
 
@@ -89,18 +116,27 @@ builder.Services.AddSwaggerGen((c =>
             Array.Empty<string>()
         }
     });
-}));
+});
 
 var app = builder.Build();
 
+// Orden correcto de middlewares
 app.UseCors("AllowAll");
+
+
 app.UseSwagger();
 app.UseSwaggerUI();
+app.UseDeveloperExceptionPage();
 
 app.UseAuthentication();
 app.UseAuthorization();
 
 app.MapControllers();
 
-app.Run();
+// Endpoints GraphQL (sin autenticación)
+app.MapGraphQL("/graphql");
 
+// Voyager (explorador visual tipo Swagger para GraphQL)
+app.UseVoyager("/graphql-voyager", "/graphql");
+
+app.Run();

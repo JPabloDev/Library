@@ -70,11 +70,11 @@ namespace LibraryApi.Controllers
         public async Task<IActionResult> ChangeStatusToInActive(int id)
         {
             var book = await _context.Libros.FirstOrDefaultAsync(l => l.Id == id);
-            book.Fecha_Actualizacion = DateTime.Now;
             if (book == null) 
                 return NotFound();
 
             book.Activo = false;
+            book.Fecha_Actualizacion = DateTime.Now;
 
             await _context.SaveChangesAsync();
             return Ok("El Libro ha Cambiado de estado Exitosamente.");

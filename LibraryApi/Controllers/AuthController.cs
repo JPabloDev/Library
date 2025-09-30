@@ -1,7 +1,10 @@
-﻿using LibraryApi.Models.DTOs;
+﻿using LibraryApi.Data;
+using LibraryApi.Models.DTOs;
 using LibraryApi.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Internal;
 using System.Security.Claims;
 
 namespace LibraryApi.Controllers
@@ -12,7 +15,6 @@ namespace LibraryApi.Controllers
     public class AuthController : ControllerBase
     {
         private readonly IAuthService _authService;
-
         public AuthController(IAuthService authService)
         {
             _authService = authService;
